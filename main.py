@@ -1,6 +1,5 @@
 from utils import *
 from utils_eval import *
-from blackbox import *
 from data_loader import *
 from trainer import train_epoch, val_epoch
 
@@ -171,7 +170,7 @@ def train_model(model, optimizer, scheduler, model_path, criterion, epochs, kwar
   print('TOTAL TRAINING TIME: ', training_time)
 
 
-def infer(X_test, truth_test, model, num_samples, **kwargs):
+def infer(X_test, truth_test, model, knn, num_samples, **kwargs):
   '''
   num_samples: no. counterfactuals needed
   '''
@@ -255,7 +254,7 @@ def infer(X_test, truth_test, model, num_samples, **kwargs):
       MAN += find_manifold_dist(output_, knn)
   
   total_time = end - start
-  return f'Cont Prox: {CO/N}, 
+  print(f'Cont Prox: {CO/N}, 
           Cat Prox: {CA/N}, 
           Diversity: {DI/N}, 
           Sparsity: {SP/N}, 
@@ -263,7 +262,7 @@ def infer(X_test, truth_test, model, num_samples, **kwargs):
           Coverage: {CG/N}, 
           Manifold Dist: {MAN/N}, 
           Valid Cat: {VAC/N}, 
-          Inference time: {total_time}'
+          Inference time: {total_time}')
 
 def train_load_knn(name):
   
@@ -352,8 +351,9 @@ if __name__ == '__main__':
       if not os.path.isfile(model_path): 
         print('No pre-trained model exists! Specify "train" to train the model.')
       num_samples = 100
+      knn = train_load_knn(name)
       load_model(model, None, model_path, device)
-      infer(X_test, truth_test, model, num_samples, **kwargs)
+      infer(X_test, truth_test, model, knn, num_samples, **kwargs)
     
     
 
