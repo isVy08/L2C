@@ -30,7 +30,9 @@ python main.py train <dataset-name>
 Please specify the correct dataset name given in the parentheses above. If there is no pre-trained black-box model, it will be trained before L2C model is run. Refer to `data_loader.py` and `blackbox.py` for details.
 
 ## Baselines 
-Reproduction for `FastAR` can be found in `FastAR/`
+Reproduction for `FastAR` can be found in `FastAR/`. 
+Refer to [FastAR repo](https://github.com/vsahil/FastAR-RL-for-generating-AR) for more explanations.
+
 First, you need to transfer our pre-processed data and pre-trained black-box in `FastAR/fastar/datasets` and `FastAR/fastar/models`  by running 
 
 ```
@@ -55,9 +57,7 @@ the variable `$y` is to specify the desired class. Before running the script, yo
 ```
 bash run_german.sh train
 bash run_german.sh eval
-``
-
-
+```
 In `baselines/`, we provide our customized codes for other baselines, gratefully borrowed from [DiCE repo](https://github.com/interpretml/DiCE), [MCCE repo](https://github.com/NorskRegnesentral/mccepy), [COPA repo](https://github.com/ngocbh/COPA) and [Certifai repo](https://github.com/Ighina/CERTIFAI). `Feasible-VAE` is supported in `DiCE` library. To run and evaluate the DiCE, F-VAE, COPA, MCCE and Certifai, 
 
 ```
