@@ -144,20 +144,9 @@ class DataGenerator(object):
     Discretize continuous columns and re-index categorical columns
     '''
 
-    train_path = f'data/{self.name}/{self.name}_train.csv'
-    test_path = f'data/{self.name}/{self.name}_test.csv'
+    train_path = f'data/{self.name}_train.csv'
+    test_path = f'data/{self.name}_test.csv'
 
-    if self.name == 'admission' and not os.path.isfile(train_path):
-      print('Train-test split for Admission data ...')
-      df = pd.read_csv('data/admission/admission.csv')
-      df.drop(columns=['Serial No.'], inplace = True)
-      df['Chance of Admit '] = df['Chance of Admit '].map(lambda x: 1 if x >= 0.7 else 0).to_numpy()
-      df.rename(columns={'Chance of Admit ': 'Chance of Admit', 'LOR ': 'LOR'}, inplace=True)
-      train_size = int(df.shape[0] * 0.8) 
-      df.iloc[:train_size, :].to_csv(train_path, index=False)
-      df.iloc[train_size:, :].to_csv(test_path, index=False)  
-    
-    
     train_dataset = pd.read_csv(train_path)
     test_dataset = pd.read_csv(test_path)
 
