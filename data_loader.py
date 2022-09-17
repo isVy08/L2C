@@ -25,7 +25,7 @@ def load_data(name, discretized, device, nbins=None):
     immutable_cols = ['UrbanRural', 'New', 'Recession']
   
   else:
-    raise ValueError
+    raise ValueError('This dataset is not supported!')
 
   if nbins is not None:
     for col in num_dict:
@@ -35,6 +35,9 @@ def load_data(name, discretized, device, nbins=None):
   return dg, immutable_cols
 
 def load_blackbox(name, dg, wrap_linear=False):
+  '''
+  Wrap sklearn Logistic Regression model into a differentiable MLP
+  '''
   classifiers = []
   for cls_index in range(1,6):
 

@@ -11,6 +11,7 @@ from tqdm import tqdm
 import torch.nn as nn
 import scipy, torch, time
 from torch.utils.data import DataLoader
+from criterion import Criterion
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 torch.manual_seed(8)
@@ -144,6 +145,7 @@ class Model(nn.Module):
 def train_model(model, optimizer, scheduler, model_path, criterion, epochs, kwargs):
   
   start = time.time()
+  prev_acc = 0
   for epoch in range(1, epochs + 1):
       train_loss, train_acc = train_epoch(model, optimizer, scheduler, train_loader, X_train, truth_train, 
                                           criterion, device, kwargs)        
@@ -169,7 +171,7 @@ def train_model(model, optimizer, scheduler, model_path, criterion, epochs, kwar
   print('TOTAL TRAINING TIME: ', training_time)
 
 
-def infer(X_test, model, num_samples, **kwargs):
+def infer(X_test, truth_test, model, num_samples, **kwargs):
   '''
   num_samples: no. counterfactuals needed
   '''
@@ -253,7 +255,15 @@ def infer(X_test, model, num_samples, **kwargs):
       MAN += find_manifold_dist(output_, knn)
   
   total_time = end - start
-  return CO/N, CA/N, DI/N, SP/N, VA/N, CG/N, MAN/N, VAC/N, total_time
+  return f'Cont Prox: {CO/N}, 
+          Cat Prox: {CA/N}, 
+          Diversity: {DI/N}, 
+          Sparsity: {SP/N}, 
+          Validity: {VA/N}, 
+          Coverage: {CG/N}, 
+          Manifold Dist: {MAN/N}, 
+          Valid Cat: {VAC/N}, 
+          Inference time: {total_time}'
 
 def train_load_knn(name):
   
@@ -279,47 +289,74 @@ def train_load_knn(name):
 
 
 if __name__ == '__main__':
-  """# Load data"""
+  import sys
+  name = sys.argv[1]
+  action = sys.argv[2]
 
-name = 'sba'
+  # Loading model and data
+  dg, immutable_cols = load_data(name, discretized=True, device)
 
-dg, immutable_cols = load_data(name, True, device)
-classifiers = load_blackbox(name, dg, True)
+  classifiers = load_blackbox(name, dg, wrap_linear=True)
 
-cols_ = dg.num_cols + dg.cat_cols
-mask_locations = [cols_.index(col) for col in immutable_cols]
-print(mask_locations)
-
-
-"""# Generating data"""
-
-X_train, X_val, X_test, y_train, y_val, y_test = dg.transform(return_tensor=True)
-print(X_train.shape, X_val.shape, X_test.shape)
-
-truth_train, truth_val, truth_test, _, _, _ = dg.transform(True, dg.num_cols)
-
-train_indices = list(range(X_train.size(0)))
-val_indices = list(range(X_val.size(0)))
-batch_size = 200
-train_loader = DataLoader(train_indices, batch_size=batch_size, shuffle=True)
-val_loader = DataLoader(val_indices, batch_size=batch_size, shuffle=False)
-
-D = X_train.shape[1]
-X_train.shape, X_val.shape
-
- model = Model(D, 50, 50, dg, 0.2)
-  optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-  scheduler = None
-  model.to(device)
-
-  model_path = f'model/{name}/model_{cls_index+1}.pt'
-  # model_path = 'test.pt'
-  print(model_path)
-
-  L = 5
-  prev_acc = 0
-  criterion = Criterion(classifiers[cls_index], L, alpha=1, beta=1e-3, gamma=None) 
+  cols_ = dg.num_cols + dg.cat_cols
+  mask_locations = [cols_.index(col) for col in immutable_cols]
+  print(mask_locations)
 
 
-  epochs = 100
-  kwargs = {'mask_threshold': None, 'mask_locations': mask_locations,'L': L, 'smoothing': 1.0}
+  # One hot encoded features
+  X_train, X_val, X_test, y_train, y_val, y_test = dg.transform(return_tensor=True)
+  print(X_train.shape, X_val.shape, X_test.shape)
+
+  # One hot encoded categorical features only
+  truth_train, truth_val, truth_test, _, _, _ = dg.transform(True, dg.num_cols)
+
+  train_indices = list(range(X_train.size(0)))
+  val_indices = list(range(X_val.size(0)))
+  batch_size = 200
+  train_loader = DataLoader(train_indices, batch_size=batch_size, shuffle=True)
+  val_loader = DataLoader(val_indices, batch_size=batch_size, shuffle=False)
+
+  D = X_train.shape[1]
+
+  
+
+  # L is number of local samples generated per iteration to optimize networks. L = 5 in our experiments. 
+  kwargs = {'mask_threshold': None, 'mask_locations': mask_locations,'L': 5, 'smoothing': 1.0}
+
+  for cls_index in range(5):
+    model = Model(D, 50, 50, dg, 0.2)
+    
+    if not os.path.isdir(f'model/{name}/'):
+      os.makedirs(f'model/{name}')
+
+    model_path = f'model/{name}/model_{cls_index+1}.pt'
+    if action == 'train':
+
+      
+
+      optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+      scheduler = None
+      
+
+      if os.path.isfile(model_path): 
+        print('Loading pre-trained model ...')
+        load_model(model, None, model_path, device)
+
+      model.to(device)
+      criterion = Criterion(classifiers[cls_index], beta=1e-4) 
+      epochs = 100
+      train_model(model, optimizer, scheduler, model_path, criterion, epochs, kwargs)
+
+    else: 
+      print(f'Inference begins for {name} dataset ..')
+      if not os.path.isfile(model_path): 
+        print('No pre-trained model exists! Specify "train" to train the model.')
+      num_samples = 100
+      load_model(model, None, model_path, device)
+      infer(X_test, truth_test, model, num_samples, **kwargs)
+    
+    
+
+
+  
+  

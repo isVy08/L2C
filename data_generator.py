@@ -185,24 +185,25 @@ class DataGenerator(object):
 
       # Always standardize first, 
       mapper = StandardScaler()
-      df[col] = mapper.fit_transform(df[[col]])
-      train_dataset[col] = mapper.transform(train_dataset[[col]])
+      train_dataset[col] = mapper.fit_transform(train_dataset[[col]])
+      df[col] = mapper.transform(df[[col]])
       num_to_cats = None
       self.raw_df[col] = df[col]
 
       if self.discretized:
         column = pd.qcut(train_dataset[col], self.num_dict[col], retbins=False, duplicates='drop')
+        
+        # Exceptional treatment for Portion feature of SBA dataset to obtain larger buckets 
         if (col == 'Portion' and self.name == 'sba'):
           column = pd.cut(train_dataset[col], self.num_dict[col], retbins=False, duplicates='drop')
         
-        # column = pd.qcut(df[col], self.num_dict[col], retbins=False, duplicates='drop')
         cats = pd.Categorical(column).categories.to_list()
         if len(cats) != self.num_dict[col]:
           self.num_dict[col] = len(cats)
 
         num_to_cats = dict(zip(cats, range(len(cats))))
-        df[col] = df[col].map(lambda x: self.map_interval(x, cats)) # work on this?
-        # df[col] = column.map(num_to_cats)
+        df[col] = df[col].map(lambda x: self.map_interval(x, cats)) 
+
         mapper = OneHotEncoder(handle_unknown='ignore',sparse=False)
         mapper.fit(df[[col]])
         df[col] = df[col].astype('category')
@@ -228,6 +229,9 @@ class DataGenerator(object):
     n = len(self.info['index'])
     MASK = torch.ones((size, n), device=self.device)
     if locations is None:
+      '''
+      This is used to create random masks with a certain threshold specifying max no. features to be kept fixed.
+      '''
       assert threshold is not None, 'Threshold must be specified.'
       for _ in range(threshold):
         index = [random.choice(range(n)) for _ in range(size)]
