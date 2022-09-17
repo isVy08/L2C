@@ -194,7 +194,7 @@ class DataGenerator(object):
         df[col] = df[col].map(lambda x: self.map_interval(x, cats)) 
 
         mapper = OneHotEncoder(handle_unknown='ignore',sparse=False)
-        mapper.fit(df[[col]])
+        mapper.fit(train_dataset[[col]])
         df[col] = df[col].astype('category')
       self.scaler[col] = (mapper, num_to_cats)
   

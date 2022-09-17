@@ -342,7 +342,7 @@ if __name__ == '__main__':
         load_model(model, None, model_path, device)
 
       model.to(device)
-      criterion = Criterion(classifiers[cls_index], beta=1e-4) 
+      criterion = Criterion(classifiers[cls_index], beta=1e-3) 
       epochs = 100
       train_model(model, optimizer, scheduler, model_path, criterion, epochs, kwargs)
 

@@ -15,7 +15,7 @@ def load_data(name, discretized, device, nbins=None):
     immutable_cols = ['University Rating']
 
   elif name == 'student':
-    num_dict = {'age': 2, 'absences': 3, 'G1': 3, 'G2': 4}
+    num_dict = {'age': 3, 'absences': 3, 'G1': 3, 'G2': 4}
     target_col = 'label'
     immutable_cols = ['Medu', 'Fedu', 'famsup', 'G1']
 
