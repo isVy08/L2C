@@ -180,11 +180,11 @@ class DataGenerator(object):
       self.raw_df[col] = df[col]
 
       if self.discretized:
-        column = pd.qcut(train_dataset[col], self.num_dict[col], retbins=False, duplicates='drop')
+        column = pd.qcut(df[col], self.num_dict[col], retbins=False, duplicates='drop')
         
         # Exceptional treatment for Portion feature of SBA dataset to obtain larger buckets 
         if (col == 'Portion' and self.name == 'sba'):
-          column = pd.cut(train_dataset[col], self.num_dict[col], retbins=False, duplicates='drop')
+          column = pd.cut(df[col], self.num_dict[col], retbins=False, duplicates='drop')
         
         cats = pd.Categorical(column).categories.to_list()
         if len(cats) != self.num_dict[col]:
@@ -194,7 +194,7 @@ class DataGenerator(object):
         df[col] = df[col].map(lambda x: self.map_interval(x, cats)) 
 
         mapper = OneHotEncoder(handle_unknown='ignore',sparse=False)
-        mapper.fit(train_dataset[[col]])
+        mapper.fit(df[[col]])
         df[col] = df[col].astype('category')
       self.scaler[col] = (mapper, num_to_cats)
   
