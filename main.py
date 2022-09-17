@@ -3,12 +3,11 @@ from utils_eval import *
 from data_loader import *
 from trainer import train_epoch, val_epoch
 
-import pandas as pd
-import random, math, os
+import math, os
 import numpy as np
 from tqdm import tqdm
 import torch.nn as nn
-import scipy, torch, time
+import torch, time
 from torch.utils.data import DataLoader
 from criterion import Criterion
 
@@ -170,7 +169,7 @@ def train_model(model, optimizer, scheduler, model_path, criterion, epochs, kwar
   print('TOTAL TRAINING TIME: ', training_time)
 
 
-def infer(X_test, truth_test, model, knn, num_samples, **kwargs):
+def infer(X_test, truth_test, model, cls, knn, num_samples, **kwargs):
   '''
   num_samples: no. counterfactuals needed
   '''
@@ -187,20 +186,18 @@ def infer(X_test, truth_test, model, knn, num_samples, **kwargs):
   
   CO, CA, DI, VA, SP, CG, MAN, VAC = 0, 0, 0, 0, 0, 0, 0, 0
   start = time.time()
-  print(cls_index + 1)
-  cls = classifiers[cls_index]
-
-  threshold = TH[name]
+  
+  threshold = TH[model.dg.name]
   for i in tqdm(range(N)):
     cnt_iter = 0
     x = X_test[i:i+1, ]
     
     truth_x = truth_test[i:i+1, ]
-    s0, _ = parse_sample(dg, truth_x)
+    s0, _ = parse_sample(model.dg, truth_x)
 
     # Obtain predictions
     y = cls(truth_x).argmax(-1).item()
-    s0[dg.target_col] = y
+    s0[model.dg.target_col] = y
     
     counters = []
 
@@ -215,7 +212,7 @@ def infer(X_test, truth_test, model, knn, num_samples, **kwargs):
       condA = torch.where(yhat!=y)[0].tolist()
 
       if threshold < 1.0:
-        p_mean = probs[:, :len(dg.num_cols)].mean(1)
+        p_mean = probs[:, :len(model.dg.num_cols)].mean(1)
         condB = torch.where(p_mean < threshold)[0].tolist()
       else:
         condB = condA
@@ -237,8 +234,8 @@ def infer(X_test, truth_test, model, knn, num_samples, **kwargs):
       xcfs = torch.concat(counters, axis=0)
       xcfs = xcfs[:num_samples, ]
       samples, vac = parse_sample(dg, xcfs)
-      samples[dg.target_col] = cls(xcfs).argmax(-1).cpu().numpy()
-      co, ca, di, va, sp = evaluate(dg, num_samples, s0, samples, True)
+      samples[model.dg.target_col] = cls(xcfs).argmax(-1).cpu().numpy()
+      co, ca, di, va, sp = evaluate(model.dg, num_samples, s0, samples, True)
       if va > 0:
           CG += 1
           
@@ -250,27 +247,19 @@ def infer(X_test, truth_test, model, knn, num_samples, **kwargs):
       VAC += vac
 
     
-      output_ = xcfs[:, :len(dg.num_cols)].detach().numpy()
+      output_ = xcfs[:, :len(model.dg.num_cols)].detach().numpy()
       MAN += find_manifold_dist(output_, knn)
   
   total_time = end - start
-  print(f'Cont Prox: {CO/N}, 
-          Cat Prox: {CA/N}, 
-          Diversity: {DI/N}, 
-          Sparsity: {SP/N}, 
-          Validity: {VA/N}, 
-          Coverage: {CG/N}, 
-          Manifold Dist: {MAN/N}, 
-          Valid Cat: {VAC/N}, 
-          Inference time: {total_time}')
-
+  print(f'Cont Prox: {CO/N}, Cat Prox: {CA/N}, Diversity: {DI/N}, Sparsity: {SP/N}, Validity: {VA/N}, Coverage: {CG/N}, Manifold Dist: {MAN/N}, Valid Cat: {VAC/N}, Inf. Time {total_time}')
+ 
 def train_load_knn(name):
   
 
   if not os.path.isfile(f'model/{name}.knn'):
     print(f'Training knn for {name} dataset ...')
-    dg, immutable_cols = load_data(name, False, device)
-    X_train, X_val, X_test, y_train, y_val, y_test = dg.transform(return_tensor=False)
+    dg, _ = load_data(name, False, device)
+    X_train, X_val, _, _, _, _ = dg.transform(return_tensor=False)
     
     train_data = np.concatenate((X_train, X_val))
     from sklearn.neighbors import NearestNeighbors
@@ -293,7 +282,7 @@ if __name__ == '__main__':
   action = sys.argv[2]
 
   # Loading model and data
-  dg, immutable_cols = load_data(name, discretized=True, device)
+  dg, immutable_cols = load_data(name, discretized=True, device=device)
 
   classifiers = load_blackbox(name, dg, wrap_linear=True)
 
