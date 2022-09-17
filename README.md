@@ -30,7 +30,35 @@ python main.py train <dataset-name>
 Please specify the correct dataset name given in the parentheses above. If there is no pre-trained black-box model, it will be trained before L2C model is run. Refer to `data_loader.py` and `blackbox.py` for details.
 
 ## Baselines 
-We provide our customized codes for some baselines, gratefully borrowed from [DiCE repo](https://github.com/interpretml/DiCE), [MCCE repo](https://github.com/NorskRegnesentral/mccepy), [COPA repo](https://github.com/ngocbh/COPA) and [Certifai repo](https://github.com/Ighina/CERTIFAI). `Feasible-VAE` is supported in `DiCE` library. To run and evaluate the DiCE, F-VAE, COPA, MCCE and Certifai, 
+Reproduction for `FastAR` can be found in `FastAR/`
+First, you need to transfer our pre-processed data and pre-trained black-box in `FastAR/fastar/datasets` and `FastAR/fastar/models`  by running 
+
+```
+python compare.py fastar None
+``` 
+
+Next, go the this directory. Install dependencies and set up the sub-directories
+```
+cd FastAR
+bash install_requirements.sh
+cd fastar
+for name in german admission student sba
+do
+  mkdir output/samples/$name/
+  mkdir output/trained_models/$name/
+done
+```
+
+You can find the base scripts `run_<dataset-name>.sh` for training and evaluation. Since `FastAR` only supports single class, 
+the variable `$y` is to specify the desired class. Before running the script, you need to adjust line 61 and line 76 in `gym-midline/gym_midline/envs/my_<dataset-name>.py` accordingly. The current setup assumes label 0 is undesirable class and 1 is the desired outcome. The outputs will be written in `FastAR/fastar/output/`.
+
+```
+bash run_german.sh train
+bash run_german.sh eval
+``
+
+
+In `baselines/`, we provide our customized codes for other baselines, gratefully borrowed from [DiCE repo](https://github.com/interpretml/DiCE), [MCCE repo](https://github.com/NorskRegnesentral/mccepy), [COPA repo](https://github.com/ngocbh/COPA) and [Certifai repo](https://github.com/Ighina/CERTIFAI). `Feasible-VAE` is supported in `DiCE` library. To run and evaluate the DiCE, F-VAE, COPA, MCCE and Certifai, 
 
 ```
 python compare.py <method-name> <dataset-name>
@@ -38,24 +66,4 @@ python compare.py <method-name> <dataset-name>
 
 `CRUDS` can be implemented off-the-shelf from [CARLA repo](https://github.com/carla-recourse/CARLA/tree/d9dd5740b54384e869b3fd48c82f52fb4ab39a93). 
 
-`FastAR` is a bit more complicated. First, clone the [FastAR repo](https://github.com/vsahil/FastAR-RL-for-generating-AR).
-Transfer our pre-processed data and pre-trained black-box in `FastAR/fastar/datasets` and `FastAR/fastar/models`  by running 
 
-```
-python compare.py fastar None
-``` 
-The environment setup for our tasks are given in `baselines/gym-midline` and `baselines/classifer_dataset`. 
-Replace FastAR original setups with (or include them in) the file/folder with the same names. 
-
-To train FastAR on the first black-box model e.g., on German Credit, run the command
-
-```
-python -W ignore main.py --entropy-coef 0.01 --save-dir ./output/trained_models/german/mygerman1 --env-name gym_midline:mygerman-v1 --num-env-steps 100000 --lr 0.001
-```
-
-or evaluate by running
-```
-python -W ignore main.py --entropy-coef 0.01 --save-dir ./output/trained_models/german/mygerman1 --env-name gym_midline:mygerman-v1 --num-env-steps 100000 --lr 0.001 --eval
-```
-
-The outputs can be found in `FastAR/fastar/output/`.
