@@ -875,6 +875,10 @@ class CERTIFAI:
                 diff_prediction = [counter_pred!=self.predictions[0] for
                                    counter_pred in counter_preds]
                 final_generation = crossed_generation.loc[diff_prediction]
+                
+                if len(counterfacts) >= final_k:
+                    break
+                
                 if final_generation.shape[0] > 0:
                                     
                   final_distances = self.distance(sample, final_generation)[0]
