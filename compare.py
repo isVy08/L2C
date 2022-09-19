@@ -32,7 +32,6 @@ def generate_baseline(X_test, dg, cls, explainer, method, num_samples, max_iters
         elif method == 'fvae':
             output = explainer.generate_counterfactuals(
                 x, num_samples, "opposite", max_iters)
-            output = output.final_cfs_df
 
         elif method == 'certifai':
             fixed = [X_test.columns.tolist().index(col)
