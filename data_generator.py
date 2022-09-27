@@ -174,8 +174,8 @@ class DataGenerator(object):
 
       # Always standardize first, 
       mapper = StandardScaler()
-      train_dataset[col] = mapper.fit_transform(train_dataset[[col]])
-      df[col] = mapper.transform(df[[col]])
+      df[col] = mapper.fit_transform(df[[col]])
+      train_dataset[col] = mapper.transform(train_dataset[[col]])
       num_to_cats = None
       self.raw_df[col] = df[col]
 
@@ -186,7 +186,7 @@ class DataGenerator(object):
           self.num_dict[col] = len(cats)
 
         num_to_cats = dict(zip(cats, range(len(cats))))
-        df[col] = df[col].map(lambda x: self.map_interval(x, cats)) 
+        df[col] = column.map(num_to_cats)
 
         mapper = OneHotEncoder(handle_unknown='ignore',sparse=False)
         mapper.fit(df[[col]])
