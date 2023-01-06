@@ -2,7 +2,8 @@ import sys
 from utils import *
 from utils_eval import *
 from data_loader import *
-from main import train_load_knn
+
+from tqdm import tqdm
 
 import baselines.dice_ml as dice_ml
 from baselines.dice_ml.explainer_interfaces.explainer_base import ExplainerBase
@@ -52,44 +53,55 @@ def generate_baseline(X_test, dg, cls, explainer, method, num_samples, max_iters
 
     return finals
 
-
-def evaluate_baseline(X_test, synth_df, num_samples, dg, cls, knn):
+def evaluate_baseline(X_test, synth_df, num_samples, dg, cls):  
     N = synth_df.shape[0]
-    i = 0
-    CO, CA, DI, VA, SP, CG, MAN, VAC = 0, 0, 0, 0, 0, 0, 0, 0
-    for j in tqdm(range(0, N, num_samples)):
-        x = X_test.iloc[i:i+1, ]
+    i = 0 
+    SP, DI, VA, CG, HM = 0, 0, 0, 0, 0
+    SELF_CAU = []
+    for j in tqdm(range(0, N, num_samples)): 
 
-        s0, _ = parse_sample(dg, x.to_numpy())
-        y = cls.predict(x.to_numpy())[0]
-        s0[dg.target_col] = y
+      
+      x = X_test.iloc[i:i+1, ]
+      x = x.to_numpy()
 
+      s0, _ = parse_sample(dg, x)
+      y = cls.predict(x)[0]
+      s0[dg.target_col] =  y
+
+      if isinstance(synth_df, pd.DataFrame):
         output = synth_df.iloc[j:j+num_samples, :]
+      else:
+        output = synth_df[j:j+num_samples, :]
+        output = pd.DataFrame(output, columns = X_test.columns.tolist() + [dg.target_col])
 
-        samples, vac = get_clean_samples(output, dg, cls)
-        co, ca, di, va, sp = evaluate(dg, num_samples, s0, samples, False)
+        
+      samples, vac = get_clean_samples(output, dg, cls)
+      
+      sp, di, va = evaluate(dg, num_samples, s0, samples, False)
+      
 
-        if va > 0:
-            CG += 1
-        CO += co
-        CA += ca
-        DI += di
-        VA += va
-        SP += sp
-        VAC += vac
+      if va > 0:
+        CG += 1
+      
+      DI += di 
+      VA += va
+      SP += sp
 
-        i += 1
-
-        # Calculate manifold distance
-        if dg.target_col in output.columns:
-            output_ = output.drop(columns=dg.target_col).to_numpy()
-        else:
-            output_ = output.to_numpy()
-        output_ = output_[:, :len(dg.num_cols)]
-        MAN += find_manifold_dist(output_, knn)
+      
+      scau = check_causal_relations(dg, s0, samples)
+      
+      if scau > -1.0:
+        SELF_CAU.append(scau)
+    
+      i += 1
 
     N = N / num_samples
-    print(f'Cont Prox: {CO/N}, Cat Prox: {CA/N}, Diversity: {DI/N}, Sparsity: {SP/N}, Validity: {VA/N}, Coverage: {CG/N}, Manifold Dist: {MAN/N}, Valid Cat: {VAC/N}')
+    
+    SPARSITY = SP / N
+    DIVERSITY = DI / N
+    HM = (2 * DIVERSITY * (1 - SPARSITY)) / (DIVERSITY  + 1 - SPARSITY)
+    print('Sparsity - Diveristy - HarMean - Validity - Coverage - Self Cau') # sparsity is negative in this sense
+    return SPARSITY, DIVERSITY, HM, VA/N, CG/N, np.mean(SELF_CAU)
 
 
 if __name__ == '__main__':
@@ -97,13 +109,12 @@ if __name__ == '__main__':
     method = sys.argv[1]
     name = sys.argv[2]
 
-    dg, immutable_cols = load_data(name, False, device)
+    dg, immutable_cols = load_data(name, False, device, 'default')
     classifiers = load_blackbox(name, dg, False)
 
     X_train, X_val, X_test, y_train, y_val, y_test = dg.transform(
         return_tensor=False)
     X_train[dg.target_col] = y_train
-    knn = train_load_knn(name)
 
 
     
@@ -145,14 +156,14 @@ if __name__ == '__main__':
                 X_test, dg, cls, explainer, method, num_samples, max_iter)
             print(
                 f'Start evaluating {method} at black-box {cls_index + 1} ...')
-            evaluate_baseline(X_test, finals, num_samples, dg, cls, knn)
+            evaluate_baseline(X_test, finals, num_samples, dg, cls)
 
     elif method == 'fvae':
 
         dice_data = dice_ml.Data(
             dataframe=X_train, continuous_features=dg.encoded_columns, outcome_name=dg.target_col)
         backend = {'model': 'base_model.BaseModel',
-                   'explainer': 'feasible_base_vae.FeasibleBaseVAE'}
+                'explainer': 'feasible_base_vae.FeasibleBaseVAE'}
 
         params = {'german': [10, 42], 'admission': [
             30, 62], 'sba': [70, 42], 'student': [10, 62]}
@@ -178,7 +189,7 @@ if __name__ == '__main__':
                 X_test, dg, cls, explainer, 'FVAE', num_samples, max_iter)
             print(
                 f'Start evaluating {method} at black-box {cls_index + 1} ...')
-            evaluate_baseline(X_test, finals, num_samples, dg, cls, knn)
+            evaluate_baseline(X_test, finals, num_samples, dg, cls)
 
     elif method == 'mcce':
         from baselines.mcce import *
@@ -207,30 +218,13 @@ if __name__ == '__main__':
 
         for cls_index in range(5):
             start = time.time()
+            cls = classifiers[cls_index]
             finals = run_mcce(
                 X_test, dg, classifiers[cls_index], num_samples, 'sklearn')
             print(
                 f'Start evaluating {method} at black-box {cls_index + 1} ...')
-            evaluate_baseline(X_test, finals, num_samples, dg, cls, knn)
-
-    elif method == 'certifai':
-        from baselines.certifai import CERTIFAI
-        train_set = pd.concat((X_train, X_val), axis=0)
-        for col in dg.encoded_columns:
-            if col not in dg.num_cols:
-                train_set[col] = train_set[col].astype('object')
-                X_test[col] = X_test[col].astype('object')
-
-        for cls_index in range(5):
-            cls = classifiers[cls_index]
-            explainer = CERTIFAI(train_set)
-            explainer.set_distance('L1')
-            finals = generate_baseline(
-                X_test, dg, cls, explainer, method, num_samples, max_iter)
-            print(
-                f'Start evaluating {method} at black-box {cls_index + 1} ...')
-            evaluate_baseline(X_test, finals, num_samples, dg, cls, knn)
-    
+            evaluate_baseline(X_test, finals, num_samples, dg, cls)
+ 
     elif method == 'fastar':
       data_path = f'FastAR/fastar/datasets/my_{name}_data.pickle'
       print('Transfering datasets ...')

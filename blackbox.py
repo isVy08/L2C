@@ -15,6 +15,7 @@ class LinearClassifier(nn.Module):
       self.device = device
 
   def forward(self, x):
+    x = x.float()
     pred = torch.matmul(x, self.W) + self.b
     probs = torch.sigmoid(pred)
     probs = torch.cat((1-probs, probs), dim=1)
@@ -41,7 +42,7 @@ class NeuralClassifier(nn.Module):
   def predict(self, x):
     if isinstance(x, pd.DataFrame):
       x = x.to_numpy()
-    x = torch.from_numpy(x).float()
+    x = torch.from_numpy(x.astype('float')).float()
     x = x.to(self.device)
     probs = self.layers(x)
     out = probs.argmax(-1)
@@ -50,7 +51,7 @@ class NeuralClassifier(nn.Module):
   def predict_proba(self, x):
     if isinstance(x, pd.DataFrame):
       x = x.to_numpy()
-    x = torch.from_numpy(x).float()
+    x = torch.from_numpy(x.astype('float')).float()
     x = x.to(self.device)
     out = self.layers(x)
     return out.detach().cpu().numpy()

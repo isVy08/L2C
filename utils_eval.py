@@ -3,6 +3,20 @@ import numpy as np
 import pandas as pd
 import scipy
 
+def discretize(dg, col, s0, samples):
+  if col in dg.num_cols:
+    if dg.strategy == 'default':
+      column = pd.qcut(dg.df[col], dg.num_bins[dg.name], retbins=False, duplicates='drop')  
+      cats = pd.Categorical(column).categories.to_list()      
+    else:
+      cats = [pd.Interval(cat[0], cat[1], closed='right') for cat in dg.num_bins[col]]
+    orig = np.array([dg.map_interval(x, cats) for x in s0[col]]) 
+    cf = np.array([dg.map_interval(x, cats) for x in samples[col]]) 
+  else:
+    orig = s0[col]
+    cf = samples[col]
+  return orig, cf
+
 def cont_prox(num_cols, num_samples, s0, samples):
   # Lower is better
   dist = 0
@@ -17,7 +31,6 @@ def cat_prox(cat_cols, num_samples, s0, samples):
     dist += (s0[col] != samples[col]).sum()
   
   return dist / (num_samples * len(cat_cols)) 
-  dist = 0
 
 def sparsity(all_cols, num_samples, s0, samples):
   dist = 0
@@ -25,8 +38,6 @@ def sparsity(all_cols, num_samples, s0, samples):
     dist += (s0[col] != samples[col]).sum()
   
   return dist / (num_samples * len(all_cols)) 
-  dist = 0
-
 
 def validity(target_col, num_samples, s0, samples):
   return (s0[target_col] != samples[target_col]).sum() / num_samples
@@ -37,17 +48,29 @@ def find_manifold_dist(x, knn):
   quantity = np.mean(nearest_dist)		
   return quantity
 
+def check_causal_relations(dg, s0, samples):
+  all_cols = dg.num_cols + dg.cat_cols
+  a, b = [], []
+  for i in dg.causal_cols:
+    causality = 0
+    col = all_cols[i]
+    orig, cf = discretize(dg, col, s0, samples)
+    num_samples = cf.shape[0]
+    causality += (cf >= orig).sum() / num_samples
+    a.append(causality)
+
+  a = np.mean(a) if len(a) > 0 else -1.0 
+  return a
+
+
 def diversity(dg, s0, samples, use_raw=False):
   # Higher is better
   new_samples = {}
   # Discretize numeric columns, on all datasets for evaluation
   df = dg.raw_df if use_raw else dg.df
   for col in dg.num_cols:
-    column, _ = pd.qcut(df[col], dg.num_dict[col], retbins=True, duplicates='drop')
-    cats = pd.Categorical(column).categories.to_list()
-    new_samples[col] = np.array([dg.map_interval(x, cats) for x in samples[col]])
-  
-
+    _, new_samples[col] = discretize(dg, col, s0, samples)
+    
   for col in dg.cat_cols + [dg.target_col]:
     new_samples[col] = samples[col]
 
@@ -69,12 +92,12 @@ def diversity(dg, s0, samples, use_raw=False):
     return div / cnt
 
 def evaluate(dg, num_samples, s0, samples, use_raw):
-  co = cont_prox(dg.num_cols, num_samples, s0, samples)
-  ca = cat_prox(dg.cat_cols, num_samples, s0, samples)
+  # co = cont_prox(dg.num_cols, num_samples, s0, samples)
+  # ca = cat_prox(dg.cat_cols, num_samples, s0, samples)
   va = validity(dg.target_col, num_samples, s0, samples)
   di = diversity(dg, s0, samples, use_raw)
   sp = sparsity(dg.num_cols + dg.cat_cols, num_samples, s0, samples)
-  return co, ca, di, va, sp
+  return sp, di, va
 
 def parse_sample(dg, x):
   '''

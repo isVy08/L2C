@@ -3,7 +3,7 @@ from utils_eval import *
 from data_loader import *
 from trainer import train_epoch, val_epoch
 
-import math, os
+import math, os, random
 import numpy as np
 from tqdm import tqdm
 import torch.nn as nn
@@ -58,6 +58,23 @@ class Sample_Bernoulli(nn.Module):
       sample = torch.bernoulli(probs)
     return sample
 
+class Perturber(nn.Module):
+  def __init__(self, D, HP):
+    super(Perturber, self).__init__()
+    self.perturber = nn.Sequential(
+          nn.Linear(D, HP), 
+          nn.ReLU(),
+          nn.Linear(HP, HP),
+          nn.ReLU(), 
+          nn.Linear(HP, HP),
+          nn.ReLU(), 
+          nn.Linear(HP, D)
+      )
+  
+  def forward(self, x):
+    return self.perturber(x)
+    
+
 class Model(nn.Module):
     
     def __init__(self, D, HP, HS, dg, tau=0.7):
@@ -67,7 +84,7 @@ class Model(nn.Module):
       self.N = len(dg.info['index'])
       self.C = Sample_Categorical(tau)
       self.B = Sample_Bernoulli(tau)
-      
+     
       self.selector = nn.Sequential(
           nn.Linear(D, HS), 
           nn.ReLU(),
@@ -75,63 +92,84 @@ class Model(nn.Module):
           nn.Sigmoid()          
       )
 
-      self.perturber = nn.Sequential(
-          nn.Linear(D, HP), 
-          nn.ReLU(),
-          nn.Linear(HP, HP),
-          nn.ReLU(), 
-          nn.Linear(HP, D)
-      )
+
+
+      self.perturber = Perturber(D, HP)
+    
+    def perturb(self, col_index, x, truth_x, W, probs):
+      
+
+      start, end = self.dg.info['index'][col_index]
+      p_i = probs[:, col_index : col_index+1]   
+
+      input_i = x[:, start:end]
+
+      logits = W[:, start:end]
+      curr_states = input_i.max(dim=-1).indices
+      
+      
+      if col_index in self.dg.causal_cols:
+        logit_masks = torch.ones_like(logits, device=x.device)
+        bs = truth_x.size(0)
+        for batch_index in range(bs):
+          curr = curr_states[batch_index].item()
+          logit_masks[batch_index, :curr] = -100
+
+        logits = logits + logit_masks
+
+      x_tilde = self.C(logits, self.smoothing)
+      num_cols_count = len(self.dg.info['range']) 
+      if col_index < num_cols_count:
+        ts = torch.Tensor(self.dg.info['range'][col_index]).to(x.device) 
+        x_tilde = torch.matmul(x_tilde, ts).mean(dim=1).unsqueeze(-1)
+        x_i = truth_x[:, col_index : col_index+1]
+      
+      else:
+        x_i = input_i
+
+      x_tilde = torch.mul(p_i, x_tilde) + torch.mul((1-p_i), x_i) 
+      self.output[col_index] = x_tilde 
 
 
     def forward(self, x, truth_x, **kwargs): 
-      # x : [B, N]
-      
+      # x : [B, D]
+
       L = kwargs['L']
       mask_threshold = kwargs['mask_threshold']
-      smoothing = kwargs['smoothing']
+      self.smoothing = kwargs['smoothing']
       mask_locations = kwargs['mask_locations']
 
       if L > 1: 
         x = torch.repeat_interleave(x, L, dim=0)
         truth_x = torch.repeat_interleave(truth_x, L, dim=0)
     
+      
       P = self.selector(x)
-      probs = self.B(P)
+      probs = self.B(P)   
       
       if bool(mask_locations) or bool(mask_threshold):
         
         batch_size = x.size(0)
         mask = self.dg.create_mask(batch_size, mask_threshold, mask_locations)
-        probs = torch.mul(probs, mask)  
+        probs = torch.mul(probs, mask)
+        # P = probs = mask  
+
+
       
-      x_ = torch.exp(x)
-      W = self.perturber(x_)
+      W = self.perturber(x)
 
       # If 1: change, 0: keep
-      output = []
-      num_cols_count = len(self.dg.info['range'])
-      for i in range(self.N):
-        
-        start, end = self.dg.info['index'][i]
-        p_i = probs[:, i:i+1]        
-        
-        logits = W[:, start:end]
-        x_tilde = self.C(logits, smoothing)
-        
-        # Decode to continuous rep.
-        if i < num_cols_count:
-          ts = torch.Tensor(self.dg.info['range'][i]).to(x.device) 
-          x_tilde = torch.matmul(x_tilde, ts).mean(dim=1).unsqueeze(-1)
-          
-          x_i = truth_x[:, i:i+1]    
-          
-        else:
-          x_i = x[:, start:end]
-
-        x_tilde = torch.mul(p_i, x_tilde) + torch.mul((1-p_i), x_i)       
-        output.append(x_tilde)
+      self.output = {i: None for i in range(self.N)}
       
+
+
+      for i in range(self.N):
+        if self.output[i] is None:
+          self.perturb(i, x, truth_x, W, probs)
+          
+  
+    
+      output = list(self.output.values())
       xcf = torch.cat(output, dim=1)
 
       if self.training:
@@ -169,56 +207,46 @@ def train_model(model, optimizer, scheduler, model_path, criterion, epochs, kwar
   print('TOTAL TRAINING TIME: ', training_time)
 
 
-def infer(X_test, truth_test, model, cls, knn, num_samples, **kwargs):
+def infer(X_test, truth_test, model, cls, num_samples, **kwargs):
   '''
   num_samples: no. counterfactuals needed
   '''
 
-  kwargs['L'] = 100
-
-  # Empirical minimum sparsity thresholds for each dataset
-  TH = {'german': 0.50, 'admission': 0.70, 'student': 0.30, 'sba': 0.30}
-
+  kwargs['L'] = 1000
 
   num_samples = 100
-  max_iter = 100000
+  max_iter = 10000
   N = X_test.size(0)
   
-  CO, CA, DI, VA, SP, CG, MAN, VAC = 0, 0, 0, 0, 0, 0, 0, 0
   start = time.time()
-  
-  threshold = TH[model.dg.name]
+  threshold = 1.0
+  finals = []
   for i in tqdm(range(N)):
     cnt_iter = 0
     x = X_test[i:i+1, ]
     
     truth_x = truth_test[i:i+1, ]
-    s0, _ = parse_sample(model.dg, truth_x)
 
     # Obtain predictions
     y = cls(truth_x).argmax(-1).item()
-    s0[model.dg.target_col] = y
     
     counters = []
 
     cnt_sample = 0
     while cnt_sample < num_samples and cnt_iter < max_iter:
-      out = model(x, truth_x, **kwargs)
-      xcf = out[1]
-      probs = out[2]
+      _, xcf, probs, _ = model(x, truth_x, **kwargs)
       yhat = cls(xcf).argmax(-1)
 
-      
-      condA = torch.where(yhat!=y)[0].tolist()
-
       if threshold < 1.0:
-        p_mean = probs[:, :len(model.dg.num_cols)].mean(1)
-        condB = torch.where(p_mean < threshold)[0].tolist()
+        sparsity_indices = torch.where(probs.mean(-1) <= threshold)[0].tolist()
       else:
-        condB = condA
+        sparsity_indices = list(range(probs.size(0)))
+
       
-      indices = set(condA) & set(condB)
-      
+      validity_indices = torch.where(yhat!=y)[0].tolist()
+
+      indices = set(sparsity_indices) & set(validity_indices)
+
       if len(indices) > 0:
         indices = list(indices)
         selected = xcf[indices,]
@@ -232,57 +260,31 @@ def infer(X_test, truth_test, model, cls, knn, num_samples, **kwargs):
     if cnt_sample > 1:
 
       xcfs = torch.concat(counters, axis=0)
-      xcfs = xcfs[:num_samples, ]
-      samples, vac = parse_sample(dg, xcfs)
-      samples[model.dg.target_col] = cls(xcfs).argmax(-1).cpu().numpy()
-      co, ca, di, va, sp = evaluate(model.dg, num_samples, s0, samples, True)
-      if va > 0:
-          CG += 1
-          
-      CO += co 
-      CA += ca 
-      DI += di 
-      VA += va
-      SP += sp
-      VAC += vac
+      if xcfs.shape[0] < num_samples: 
+        cnt = xcfs.shape[0]
+        selected = random.choices(range(cnt), k = num_samples - cnt)
+        xcfs = torch.concat((xcfs, xcfs[selected, :]), dim = 0)
+      else:
+        xcfs = xcfs[:num_samples, ]
 
-    
-      output_ = xcfs[:, :len(model.dg.num_cols)].detach().numpy()
-      MAN += find_manifold_dist(output_, knn)
-  
-  total_time = end - start
-  print(f'Cont Prox: {CO/N}, Cat Prox: {CA/N}, Diversity: {DI/N}, Sparsity: {SP/N}, Validity: {VA/N}, Coverage: {CG/N}, Manifold Dist: {MAN/N}, Valid Cat: {VAC/N}, Inf. Time {total_time}')
- 
-def train_load_knn(name):
-  
+      ycf = cls(xcfs).argmax(-1).unsqueeze(-1)
+      xcfs = torch.concat((xcfs, ycf), dim = -1)
+      finals.append(xcfs.detach().cpu().numpy())
 
-  if not os.path.isfile(f'model/{name}.knn'):
-    print(f'Training knn for {name} dataset ...')
-    dg, _ = load_data(name, False, device)
-    X_train, X_val, _, _, _, _ = dg.transform(return_tensor=False)
-    
-    train_data = np.concatenate((X_train, X_val))
-    from sklearn.neighbors import NearestNeighbors
-    knn = NearestNeighbors(n_neighbors=5, p=1)
-    n = len(dg.num_cols)
-    train_data = train_data[:, :n]
-    knn.fit(train_data)
-    print(f'Writing knn for {name} dataset ...')
-    write_pickle(knn, f'model/{name}.knn')
+  total_time = end-start
+  print(total_time)
+  finals = np.concatenate(finals)
+  return finals 
   
-  else: 
-    knn = load_pickle(f'model/{name}.knn')
-  
-  return knn
-
 
 if __name__ == '__main__':
   import sys
   name = sys.argv[1]
   action = sys.argv[2]
+  strategy = 'default' # equal-frequency discretization
 
   # Loading model and data
-  dg, immutable_cols = load_data(name, discretized=True, device=device)
+  dg, immutable_cols = load_data(name, True, device, strategy)
 
   classifiers = load_blackbox(name, dg, wrap_linear=True)
 
@@ -318,9 +320,8 @@ if __name__ == '__main__':
       os.makedirs(f'model/{name}')
 
     model_path = f'model/{name}/model_{cls_index+1}.pt'
+    output_path = f'data/{name}/output_{cls_index+1}.csv'
     if action == 'train':
-
-      
 
       optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
       scheduler = None
@@ -337,12 +338,13 @@ if __name__ == '__main__':
 
     else: 
       print(f'Inference begins for {name} dataset ..')
-      if not os.path.isfile(model_path): 
-        print('No pre-trained model exists! Specify "train" to train the model.')
+      
       num_samples = 100
-      knn = train_load_knn(name)
       load_model(model, None, model_path, device)
-      infer(X_test, truth_test, model, knn, num_samples, **kwargs)
+      output = infer(X_test, truth_test, model, num_samples, output_path, **kwargs)
+      _, _, X_base, _, _, _ = dg.transform(False, dg.num_cols)
+      output = pd.DataFrame(output, columns = X_base.columns.tolist() + [dg.target_col])
+      output.to_csv(output_path)
     
     
 
