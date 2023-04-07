@@ -46,8 +46,8 @@ class Sample_Bernoulli(nn.Module):
     self.tau = tau
   def forward(self, probs):
     if self.training:
-      unif_a = torch.rand_like(probs)
-      unif_b = torch.rand_like(probs)
+      unif_a = torch.rand(probs.shape)
+      unif_b = torch.rand(probs.shape)
 
       gumbel_a = -torch.log(-torch.log(unif_a))
       gumbel_b = -torch.log(-torch.log(unif_b))
