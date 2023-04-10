@@ -185,6 +185,7 @@ def train_model(model, optimizer, scheduler, model_path, criterion, epochs, kwar
       train_loss, train_acc = train_epoch(model, optimizer, scheduler, train_loader, X_train, truth_train, 
                                           criterion, device, kwargs)        
       
+      if math.isnan(train_loss): break
       # Evaluation
       val_loss, val_acc = val_epoch(model, val_loader, X_val, truth_val,
                                     criterion, device, kwargs)
@@ -193,8 +194,7 @@ def train_model(model, optimizer, scheduler, model_path, criterion, epochs, kwar
       msg = f"Epoch: {epoch}, Train loss: {train_loss:.3f}, Train_acc: {train_acc:.3f} // Val loss: {val_loss:.3f}, Val_acc: {val_acc:.3f}"
       print(msg)
 
-      if math.isnan(train_loss) or math.isnan(val_loss):
-          break
+      
           
       if val_acc > prev_acc:
           print("Saving model ...") 
@@ -301,7 +301,7 @@ if __name__ == '__main__':
 
   train_indices = list(range(X_train.size(0)))
   val_indices = list(range(X_val.size(0)))
-  batch_size = 200
+  batch_size = 50
   train_loader = DataLoader(train_indices, batch_size=batch_size, shuffle=True)
   val_loader = DataLoader(val_indices, batch_size=batch_size, shuffle=False)
 
