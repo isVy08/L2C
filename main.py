@@ -134,7 +134,6 @@ class Model(nn.Module):
     def forward(self, x, truth_x, **kwargs): 
       # x : [B, D]
 
-      L = kwargs['L']
       mask_threshold = kwargs['mask_threshold']
       self.smoothing = kwargs['smoothing']
       mask_locations = kwargs['mask_locations']
@@ -310,8 +309,8 @@ if __name__ == '__main__':
 
   
 
-  # L is number of local samples generated per iteration to optimize networks. L = 5 in our experiments. 
-  kwargs = {'mask_threshold': None, 'mask_locations': mask_locations,'L': 5, 'smoothing': 1.0}
+  # L is number of local samples generated per iteration to optimize networks. L = 1 for training. 
+  kwargs = {'mask_threshold': None, 'mask_locations': mask_locations,'L': 1, 'smoothing': 1.0}
 
   for cls_index in range(5):
     model = Model(D, 50, 50, dg, 0.2)
