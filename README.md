@@ -1,5 +1,5 @@
 # L2C
-This repo contains codes for reproducing the experiments in the paper Learning to Counter: Stochastic Feature-based Learning for Diverse Counterfactual Explanations. 
+This repo contains codes for reproducing the experiments in the paper Learning to Counter: [Feature-based Learning for Diverse and Privacy-Preserving Counterfactual Explanations](https://arxiv.org/abs/2209.13446) accepted at KDD 2023.
 
 ## Dependencies 
 `torch`, `sklearn` and `pandas==1.3.5` 
