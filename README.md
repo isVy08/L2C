@@ -66,4 +66,5 @@ python compare.py <method-name> <dataset-name>
 
 `CRUDS` can be implemented off-the-shelf from [CARLA repo](https://github.com/carla-recourse/CARLA/tree/d9dd5740b54384e869b3fd48c82f52fb4ab39a93). 
 
-
+## Citation
+If you use the codes or datasets in this repository, please cite our paper.
