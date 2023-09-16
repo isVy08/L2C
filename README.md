@@ -68,3 +68,12 @@ python compare.py <method-name> <dataset-name>
 
 ## Citation
 If you use the codes or datasets in this repository, please cite our paper.
+```
+@inproceedings{vo2023feature,
+  title={Feature-based Learning for Diverse and Privacy-Preserving Counterfactual Explanations},
+  author={Vo, Vy and Le, Trung and Nguyen, Van and Zhao, He and Bonilla, Edwin V and Haffari, Gholamreza and Phung, Dinh},
+  booktitle={Proceedings of the 29th ACM SIGKDD Conference on Knowledge Discovery and Data Mining},
+  pages={2211--2222},
+  year={2023}
+}
+```
