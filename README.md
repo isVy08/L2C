@@ -12,6 +12,7 @@ Our experiment setup is described in `data_generator.py` and `data_loader.py`.
 ## Black-box Models 
 Each dataset has its own directory in `data/` and `model/` 
 ```
+mkdir model
 for name in german admission student sba
 do
   mkdir model/$name/
