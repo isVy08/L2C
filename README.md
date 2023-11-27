@@ -12,6 +12,7 @@ Our experiment setup is described in `data_generator.py` and `data_loader.py`.
 ## Black-box Models 
 Each dataset has its own directory in `data/` and `model/` 
 ```
+mkdir model
 for name in german admission student sba
 do
   mkdir model/$name/
@@ -24,7 +25,7 @@ Our pre-trained models can be publicly accessed [here](https://drive.google.com/
 To train the generative model, run the following command
 
 ```
-python main.py train <dataset-name>
+python main.py <dataset-name> train
 ```
 
 Please specify the correct dataset name given in the parentheses above. If there is no pre-trained black-box model, it will be trained before L2C model is run. Refer to `data_loader.py` and `blackbox.py` for details.
