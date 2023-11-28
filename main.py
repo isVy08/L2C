@@ -137,6 +137,7 @@ class Model(nn.Module):
       mask_threshold = kwargs['mask_threshold']
       self.smoothing = kwargs['smoothing']
       mask_locations = kwargs['mask_locations']
+      L = kwargs['L']
 
       if L > 1: 
         x = torch.repeat_interleave(x, L, dim=0)
@@ -314,6 +315,7 @@ if __name__ == '__main__':
 
   for cls_index in range(5):
     model = Model(D, 50, 50, dg, 0.2)
+    cls = classifiers[cls_index]
     
     if not os.path.isdir(f'model/{name}/'):
       os.makedirs(f'model/{name}')
@@ -331,7 +333,7 @@ if __name__ == '__main__':
         load_model(model, None, model_path, device)
 
       model.to(device)
-      criterion = Criterion(classifiers[cls_index], alpha=1e-3) 
+      criterion = Criterion(cls, alpha=1e-3) 
       epochs = 100
       train_model(model, optimizer, scheduler, model_path, criterion, epochs, kwargs)
 
@@ -340,7 +342,7 @@ if __name__ == '__main__':
       
       num_samples = 100
       load_model(model, None, model_path, device)
-      output = infer(X_test, truth_test, model, num_samples, output_path, **kwargs)
+      output = infer(X_test, truth_test, model, cls, num_samples, output_path, **kwargs)
       _, _, X_base, _, _, _ = dg.transform(False, dg.num_cols)
       output = pd.DataFrame(output, columns = X_base.columns.tolist() + [dg.target_col])
       output.to_csv(output_path)
