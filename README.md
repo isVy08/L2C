@@ -19,7 +19,7 @@ do
   mkdir data/$name/
 done
 ```
-Our pre-trained models can be publicly accessed [here](https://drive.google.com/drive/folders/16wIKVHpf6n3CAWYlLaETJQ_uFHlaNI8H?usp=sharing). Each zip file contains 5 pre-trained models for each dataset. Download and place them in the corresponding folders. 
+Refer to `blackbox.py` for how to train, save and load pre-trained blackbox models. Please ensure the models are stored in the folders corresponding to the dataset names. 
 
 ## Running L2C
 To train the generative model, run the following command
